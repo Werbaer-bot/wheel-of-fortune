@@ -14,4 +14,9 @@ public class Pointer : MonoBehaviour
             currentValue = wheel.segment;
         }
     }
+
+    private void OnCollisionEnter(Collision collision)
+    {
+        wheelOfFortune.PlayHitDivider(transform);
+    }
 }

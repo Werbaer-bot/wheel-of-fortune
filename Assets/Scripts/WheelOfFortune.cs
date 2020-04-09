@@ -50,8 +50,15 @@ public class WheelOfFortune : MonoBehaviour
     public Toggle removeWinnerToggle;
     [Header("Effect")]
     public ParticleSystem winParticle;
+    [Header("Audio")]
+    public GameObject audioSourcePrefab;
+    public AudioClip hitDividerClip;
+    public AudioClip wheelStepClip;
+    public float wheelStepSize;
+    public AudioClip winClip;
 
     private HingeJoint joint;
+    private float lastJointAngle;
     private float timeRunning;
 
     public int wheelParts { get => wheelSegments.Count; }
@@ -59,6 +66,7 @@ public class WheelOfFortune : MonoBehaviour
     private void Start()
     {
         joint = GetComponent<HingeJoint>();
+        lastJointAngle = joint.angle;
         UpdatePartCount(wheelSegments.Count);
         onValueChanged.AddListener(OnWheelStopped);
     }
@@ -70,8 +78,13 @@ public class WheelOfFortune : MonoBehaviour
             case Mode.Stopped:
                 break;
             case Mode.Running:
-                timeRunning += Time.deltaTime;
+                if (Mathf.Abs(joint.angle - lastJointAngle) > wheelStepSize)
+                {
+                    lastJointAngle = joint.angle;
+                    PlayWheelStep();
+                }
 
+                timeRunning += Time.deltaTime;
                 if (timeRunning > 1 && joint.velocity >= -1)
                 {
                     timeRunning = 0;
@@ -99,18 +112,16 @@ public class WheelOfFortune : MonoBehaviour
     {
         Debug.Log(segment.value);
 
+        PlayWin();
         WinnerText.text = segment.value;
-
         winParticle.Play();
 
         if (removeWinners)
         {
             wheelSegments.Remove(segment);
+            UpdateSegmentCount(wheelSegments.Count);
+            RebuildWheel();
         }
-
-        UpdateSegmentCount(wheelSegments.Count);
-
-        RebuildWheel();
     }
 
     public void CreateNewSegment(int position)
@@ -235,6 +246,31 @@ public class WheelOfFortune : MonoBehaviour
         for (int i = 0; i < wheelParts; i++)
         {
             CreateNewSegment(i);
+        }
+    }
+
+    public void PlayHitDivider(Transform divider)
+    {
+        PlayOneShot(hitDividerClip, divider, 1);
+    }
+
+    public void PlayWin()
+    {
+        PlayOneShot(winClip, transform, 1);
+    }
+
+    public void PlayWheelStep()
+    {
+        PlayOneShot(wheelStepClip, transform, 1);
+    }
+
+    public void PlayOneShot(AudioClip clip, Transform point, float volume)
+    {
+        if (clip)
+        {
+            GameObject tmpAudioSource = Instantiate(audioSourcePrefab, point.position, point.rotation);
+            tmpAudioSource.GetComponent<AudioSource>().PlayOneShot(clip, volume);
+            Destroy(tmpAudioSource, clip.length);
         }
     }
 }
