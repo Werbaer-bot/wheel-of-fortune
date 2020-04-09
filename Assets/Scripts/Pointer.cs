@@ -5,13 +5,13 @@ using UnityEngine;
 public class Pointer : MonoBehaviour
 {
     public WheelOfFortune wheelOfFortune;
-    public string currentValue;
+    public WheelOfFortune.WheelSegment currentValue;
 
     private void OnTriggerStay(Collider other)
     {
         if (other.TryGetComponent(out WheelMesh wheel) && wheelOfFortune.wheelMode == WheelOfFortune.Mode.Running)
         {
-            currentValue = wheel.segment.value;
+            currentValue = wheel.segment;
         }
     }
 }
