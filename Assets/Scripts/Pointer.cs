@@ -4,6 +4,7 @@ using UnityEngine;
 
 public class Pointer : MonoBehaviour
 {
+    public ParticleSystem hitParticle;
     public WheelOfFortune wheelOfFortune;
     public WheelOfFortune.WheelSegment currentValue;
 
@@ -18,5 +19,6 @@ public class Pointer : MonoBehaviour
     private void OnCollisionEnter(Collision collision)
     {
         wheelOfFortune.PlayHitDivider(transform);
+        hitParticle.Emit(30);
     }
 }

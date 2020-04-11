@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 public class WheelOfFortune : MonoBehaviour
@@ -14,6 +15,8 @@ public class WheelOfFortune : MonoBehaviour
     {
         public int id;
         public string value;
+        public GameObject gameObject;
+        public Canvas canvas;
     }
 
     public enum Mode
@@ -39,7 +42,6 @@ public class WheelOfFortune : MonoBehaviour
     [Header("Pointer")]
     public Pointer pointer;
     [Header("UI")]
-    public int fontSize;
     public Text partCountText;
     public Text segmentCountText;
     public Text segmentResolutionText;
@@ -48,6 +50,8 @@ public class WheelOfFortune : MonoBehaviour
     public Slider segmentSlider;
     public InputField segmentValueInput;
     public Toggle removeWinnerToggle;
+    public Slider chargeSlider;
+    public GameObject wheelSegmentCanvasPrefab;
     [Header("Effect")]
     public ParticleSystem winParticle;
     [Header("Audio")]
@@ -60,12 +64,15 @@ public class WheelOfFortune : MonoBehaviour
     private HingeJoint joint;
     private float lastJointAngle;
     private float timeRunning;
+    private WheelSegment lastWinner;
+    private JointMotor motor;
 
     public int wheelParts { get => wheelSegments.Count; }
 
     private void Start()
     {
         joint = GetComponent<HingeJoint>();
+        motor = joint.motor;
         lastJointAngle = joint.angle;
         UpdatePartCount(wheelSegments.Count);
         onValueChanged.AddListener(OnWheelStopped);
@@ -73,6 +80,8 @@ public class WheelOfFortune : MonoBehaviour
 
     private void Update()
     {
+        UpdateForceInput();
+
         switch (wheelMode)
         {
             case Mode.Stopped:
@@ -96,11 +105,45 @@ public class WheelOfFortune : MonoBehaviour
         }
     }
 
+    private void UpdateForceInput()
+    {
+        if (Input.GetMouseButtonDown(0) && !EventSystem.current.IsPointerOverGameObject())
+        {
+            chargeSlider.gameObject.SetActive(true);
+            chargeSlider.value = 0;
+        }
+
+        if (Input.GetMouseButton(0))
+        {
+            chargeSlider.value += Time.deltaTime * 10;
+            chargeSlider.GetComponent<RectTransform>().anchoredPosition = Input.mousePosition;
+            chargeSlider.fillRect.GetComponent<Image>().color = Color.Lerp(Color.yellow, Color.red, chargeSlider.value / chargeSlider.maxValue);
+        }
+
+        if (Input.GetMouseButtonUp(0))
+        {
+            chargeSlider.gameObject.SetActive(false);
+
+            if (EventSystem.current.currentSelectedGameObject == null)
+            {
+                motor.force = chargeSlider.value;
+                motor.targetVelocity = -150;
+                joint.useMotor = true;
+                joint.motor = motor;
+            }
+
+        }
+    }
+
     public void StartMotor()
     {
         joint.useMotor = true;
+        motor.targetVelocity = -150;
+        motor.force = 10;
+        joint.motor = motor;
         wheelMode = Mode.Running;
         WinnerText.text = "";
+        UpdateSegmentCount(wheelSegments.Count);
     }
 
     public void StopMotor()
@@ -115,12 +158,20 @@ public class WheelOfFortune : MonoBehaviour
         PlayWin();
         WinnerText.text = segment.value;
         winParticle.Play();
+        lastWinner = segment;
 
         if (removeWinners)
         {
-            wheelSegments.Remove(segment);
-            UpdateSegmentCount(wheelSegments.Count);
-            RebuildWheel();
+            lastWinner.gameObject.GetComponent<WheelMesh>().updateMeshes = false;
+
+            LeanTween.move(lastWinner.canvas.gameObject, new Vector3(0, 2, -3), 1)
+                .setOnStart(() =>
+                {
+                    LeanTween.rotate(lastWinner.canvas.gameObject, new Vector3(0, 0, 0), 1);
+                });
+
+            wheelSegments.Remove(lastWinner);
+            //UpdateSegmentCount(wheelSegments.Count);
         }
     }
 
@@ -128,12 +179,13 @@ public class WheelOfFortune : MonoBehaviour
     {
         //Segment
         GameObject newSegment = new GameObject("WheelMesh");
+        WheelSegment newWheelSegment = wheelSegments[position];
 
         WheelMesh wheelMesh = newSegment.AddComponent<WheelMesh>();
         wheelMesh.visibilityRange = wheelSize;
         wheelMesh.circleSegmentCount = circleSegmentCount * circleResolution;
         wheelMesh.circleVertexSize = circleVertexSize * circleResolution;
-        wheelMesh.segment = wheelSegments[position];
+        newWheelSegment.gameObject = newSegment;
         wheelMeshes[position] = wheelMesh;
 
         newSegment.AddComponent<MeshFilter>();
@@ -145,26 +197,23 @@ public class WheelOfFortune : MonoBehaviour
 
         newSegment.transform.SetParent(transform);
         newSegment.transform.localPosition = Vector3.zero;
-        newSegment.transform.localEulerAngles = new Vector3(-180, position * (360 / (circleSegmentCount / circleVertexSize)), 0);
+        newSegment.transform.localEulerAngles = new Vector3(-180, position * (360f / (circleSegmentCount / circleVertexSize)), 0);
         newSegment.transform.localScale = Vector3.one;
 
         //Text
-        GameObject newTextObject = new GameObject("SegmentText: " + position);
-
-        TextMesh textMesh = newTextObject.AddComponent<TextMesh>();
-        textMesh.text = !string.IsNullOrEmpty(wheelSegments[position].value) ? wheelSegments[position].value : (position + 1).ToString();
-        textMesh.color = Color.black;
-        textMesh.fontSize = fontSize;
-        textMesh.anchor = TextAnchor.MiddleCenter;
-        textMesh.alignment = TextAlignment.Center;
-
-        newTextObject.transform.SetParent(newSegment.transform);
-        newTextObject.transform.localScale = Vector3.one * 0.01f;
+        GameObject wheelSegmentCanvas = Instantiate(wheelSegmentCanvasPrefab, newSegment.transform);
+        newWheelSegment.canvas = wheelSegmentCanvas.GetComponent<Canvas>();
+        wheelSegmentCanvas.name = "SegmentCanvas: " + position;
+        Text segmentText = wheelSegmentCanvas.GetComponentInChildren<Text>();
+        segmentText.text = !string.IsNullOrEmpty(wheelSegments[position].value) ? wheelSegments[position].value : (position + 1).ToString();
+        wheelSegmentCanvas.transform.localScale = Vector3.one * 0.01f;
 
         //Divider
         GameObject newDivider = Instantiate(dividerPrefab, transform);
-        newDivider.transform.localEulerAngles = new Vector3(0, position * (360 / (circleSegmentCount / circleVertexSize)), 0);
+        newDivider.transform.localEulerAngles = new Vector3(0, position * (360f / (circleSegmentCount / circleVertexSize)), 0);
         dividers[position] = newDivider;
+
+        wheelMesh.segment = newWheelSegment;
     }
 
     public void UpdatePartCount(float count)
@@ -251,7 +300,7 @@ public class WheelOfFortune : MonoBehaviour
 
     public void PlayHitDivider(Transform divider)
     {
-        PlayOneShot(hitDividerClip, divider, 1);
+        PlayOneShot(hitDividerClip, divider, 0.5f);
     }
 
     public void PlayWin()
@@ -261,7 +310,7 @@ public class WheelOfFortune : MonoBehaviour
 
     public void PlayWheelStep()
     {
-        PlayOneShot(wheelStepClip, transform, 1);
+        PlayOneShot(wheelStepClip, transform, 0.1f);
     }
 
     public void PlayOneShot(AudioClip clip, Transform point, float volume)

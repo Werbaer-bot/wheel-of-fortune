@@ -8,12 +8,13 @@ public class WheelMesh : MonoBehaviour
     public int circleSegmentCount = 64;
     public int circleVertexSize;
     public WheelOfFortune.WheelSegment segment;
+    public bool updateMeshes;
 
     private int circleIndexCount;
     private int circleVertexCount;
     private MeshFilter meshFilter;
     private MeshCollider meshCollider;
-    private TextMesh textMesh;
+    private Canvas segmentCanvas;
     private Vector3 center;
     private Vector3 centerOuterPoints;
     private GameObject centerObject;
@@ -22,7 +23,7 @@ public class WheelMesh : MonoBehaviour
     {
         meshFilter = GetComponent<MeshFilter>();
         meshCollider = GetComponent<MeshCollider>();
-        textMesh = GetComponentInChildren<TextMesh>();
+        segmentCanvas = GetComponentInChildren<Canvas>();
 
         centerObject = new GameObject("Center");
         centerObject.transform.SetParent(transform);
@@ -31,16 +32,19 @@ public class WheelMesh : MonoBehaviour
 
     void LateUpdate()
     {
-        UpdateMeshes();
+        if (updateMeshes)
+        {
+            UpdateMeshes();
+        }
     }
 
     private void UpdateMeshes()
     {
         meshFilter.sharedMesh = GenerateCircleMesh();
         meshCollider.sharedMesh = meshFilter.sharedMesh;
-        textMesh.transform.position = center;
-        textMesh.transform.LookAt(centerOuterPoints, textMesh.transform.up);
-        textMesh.transform.localEulerAngles = new Vector3(90, textMesh.transform.localEulerAngles.y, textMesh.transform.localEulerAngles.z);
+        segmentCanvas.transform.position = center;
+        segmentCanvas.transform.LookAt(centerOuterPoints, segmentCanvas.transform.up);
+        segmentCanvas.transform.localEulerAngles = new Vector3(90, segmentCanvas.transform.localEulerAngles.y, segmentCanvas.transform.localEulerAngles.z);
 
         centerObject.transform.position = center;
         centerObject.transform.LookAt(centerOuterPoints, centerObject.transform.up);
