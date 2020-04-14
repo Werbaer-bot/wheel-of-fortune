@@ -36,6 +36,7 @@ public class WheelOfFortune : MonoBehaviour
     public Mode wheelMode;
     public WheelValueEvent onValueChanged = new WheelValueEvent();
     public bool removeWinners;
+    public float autoStopTimer;
     [Header("Divider")]
     public GameObject dividerPrefab;
     public GameObject[] dividers;
@@ -50,7 +51,10 @@ public class WheelOfFortune : MonoBehaviour
     public Slider segmentSlider;
     public InputField segmentValueInput;
     public Toggle removeWinnerToggle;
+    public Toggle autoStopToggle;
     public Slider chargeSlider;
+    public Button startButton;
+    public Button stopButton;
     public GameObject wheelSegmentCanvasPrefab;
     [Header("Effect")]
     public ParticleSystem winParticle;
@@ -66,6 +70,8 @@ public class WheelOfFortune : MonoBehaviour
     private float timeRunning;
     private WheelSegment lastWinner;
     private JointMotor motor;
+    private float motorVelocity;
+    private float motorForce;
 
     public int wheelParts { get => wheelSegments.Count; }
 
@@ -115,7 +121,9 @@ public class WheelOfFortune : MonoBehaviour
 
         if (Input.GetMouseButton(0))
         {
-            chargeSlider.value += Time.deltaTime * 10;
+            float chargeMlp = 10;
+            chargeSlider.value += Time.deltaTime * chargeMlp;
+
             chargeSlider.GetComponent<RectTransform>().anchoredPosition = Input.mousePosition;
             chargeSlider.fillRect.GetComponent<Image>().color = Color.Lerp(Color.yellow, Color.red, chargeSlider.value / chargeSlider.maxValue);
         }
@@ -124,30 +132,52 @@ public class WheelOfFortune : MonoBehaviour
         {
             chargeSlider.gameObject.SetActive(false);
 
-            if (EventSystem.current.currentSelectedGameObject == null)
+            if (!EventSystem.current.IsPointerOverGameObject())
             {
-                motor.force = chargeSlider.value;
-                motor.targetVelocity = -150;
-                joint.useMotor = true;
-                joint.motor = motor;
+                StartMotor();
+                motorForce += chargeSlider.value;
+                motorVelocity -= chargeSlider.value * 15;
             }
+        }
 
+        if (wheelMode == Mode.Running)
+        {
+            motor.targetVelocity = motorVelocity;
+            motor.force = motorForce;
+            joint.motor = motor;
         }
     }
 
     public void StartMotor()
     {
+        startButton.interactable = false;
+        autoStopToggle.interactable = false;
+        stopButton.interactable = true;
         joint.useMotor = true;
-        motor.targetVelocity = -150;
-        motor.force = 10;
-        joint.motor = motor;
+        motorVelocity -= 100;
+        motorForce += 5;
+
         wheelMode = Mode.Running;
         WinnerText.text = "";
         UpdateSegmentCount(wheelSegments.Count);
+
+        if (autoStopToggle.isOn)
+        {
+            LeanTween.delayedCall(gameObject, autoStopTimer, () =>
+           {
+               StopMotor();
+           });
+        }
     }
 
     public void StopMotor()
     {
+        LeanTween.cancel(gameObject);
+        startButton.interactable = true;
+        autoStopToggle.interactable = true;
+        stopButton.interactable = false;
+        motorVelocity = 0;
+        motorForce = 0;
         joint.useMotor = false;
     }
 
