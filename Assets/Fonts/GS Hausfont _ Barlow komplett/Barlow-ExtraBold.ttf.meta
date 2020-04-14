@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 9216900c19c855b41b8072188b00e950
+guid: 309511e6af3bc804f92751dbafbba347
 TrueTypeFontImporter:
   externalObjects: {}
   serializedVersion: 4
@@ -8,12 +8,10 @@ TrueTypeFontImporter:
   characterSpacing: 0
   characterPadding: 1
   includeFontData: 1
-  fontName: Quicksand
+  fontName: Barlow
   fontNames:
-  - Quicksand
-  fallbackFontReferences:
-  - {fileID: 12800000, guid: 30783eb04b13bb54fafc31c9a5770cca, type: 3}
-  - {fileID: 12800000, guid: a0f4f6d71c7d553439b39653d5dd5b16, type: 3}
+  - Barlow
+  fallbackFontReferences: []
   customCharacters: 
   fontRenderingMode: 0
   ascentCalculationMode: 1
