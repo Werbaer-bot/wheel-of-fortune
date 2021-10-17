@@ -1,10 +1,13 @@
 ﻿using System;
+using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using TMPro;
+using Michsky.UI.ModernUIPack;
 
 public class WheelOfFortune : MonoBehaviour
 {
@@ -26,6 +29,7 @@ public class WheelOfFortune : MonoBehaviour
     }
 
     [Header("Wheel")]
+    public List<User> users = new List<User>();
     public List<WheelSegment> wheelSegments = new List<WheelSegment>();
     public Material[] wheelMaterials;
     public WheelMesh[] wheelMeshes;
@@ -42,20 +46,21 @@ public class WheelOfFortune : MonoBehaviour
     public GameObject[] dividers;
     [Header("Pointer")]
     public Pointer pointer;
+    [Header("Timer")]
+    public Timer timer;
     [Header("UI")]
     public Text partCountText;
-    public Text segmentCountText;
-    public Text segmentResolutionText;
-    public Text WinnerText;
-    public Slider partCountSlider;
     public Slider segmentSlider;
-    public InputField segmentValueInput;
+    public TMP_InputField segmentValueInput;
+    public ModalWindowManager winnerWindow;
     public Toggle removeWinnerToggle;
     public Toggle autoStopToggle;
     public Slider chargeSlider;
     public Button startButton;
     public Button stopButton;
     public GameObject wheelSegmentCanvasPrefab;
+    public GameObject wheelUserListPrefab;
+    public Transform wheelUserListParent;
     [Header("Effect")]
     public ParticleSystem winParticle;
     [Header("Audio")]
@@ -72,15 +77,20 @@ public class WheelOfFortune : MonoBehaviour
     private JointMotor motor;
     private float motorVelocity;
     private float motorForce;
+    private bool mouseWasNotOnUI;
 
     public int wheelParts { get => wheelSegments.Count; }
 
+    #region ---MONO---
     private void Start()
     {
         joint = GetComponent<HingeJoint>();
         motor = joint.motor;
         lastJointAngle = joint.angle;
         UpdatePartCount(wheelSegments.Count);
+        UpdateSegmentCount(wheelSegments.Count);
+        UpdateSegmentResolution(circleResolution);
+        RebuildUsers();
         onValueChanged.AddListener(OnWheelStopped);
     }
 
@@ -110,13 +120,16 @@ public class WheelOfFortune : MonoBehaviour
                 break;
         }
     }
+    #endregion
 
+    #region ---INPUT---
     private void UpdateForceInput()
     {
         if (Input.GetMouseButtonDown(0) && !EventSystem.current.IsPointerOverGameObject())
         {
             chargeSlider.gameObject.SetActive(true);
             chargeSlider.value = 0;
+            mouseWasNotOnUI = true;
         }
 
         if (Input.GetMouseButton(0))
@@ -132,11 +145,12 @@ public class WheelOfFortune : MonoBehaviour
         {
             chargeSlider.gameObject.SetActive(false);
 
-            if (!EventSystem.current.IsPointerOverGameObject())
+            if (!EventSystem.current.IsPointerOverGameObject() && mouseWasNotOnUI)
             {
                 StartMotor();
                 motorForce += chargeSlider.value;
                 motorVelocity -= chargeSlider.value * 15;
+                mouseWasNotOnUI = false;
             }
         }
 
@@ -147,22 +161,25 @@ public class WheelOfFortune : MonoBehaviour
             joint.motor = motor;
         }
     }
+    #endregion
 
+    #region ---MOTOR---
     public void StartMotor()
     {
+        timer.StopTimer();
         startButton.interactable = false;
-        autoStopToggle.interactable = false;
         stopButton.interactable = true;
         joint.useMotor = true;
         motorVelocity -= 100;
         motorForce += 5;
 
         wheelMode = Mode.Running;
-        WinnerText.text = "";
         UpdateSegmentCount(wheelSegments.Count);
 
         if (autoStopToggle.isOn)
         {
+            LeanTween.cancel(gameObject);
+
             LeanTween.delayedCall(gameObject, autoStopTimer, () =>
            {
                StopMotor();
@@ -172,21 +189,28 @@ public class WheelOfFortune : MonoBehaviour
 
     public void StopMotor()
     {
+        timer.StopTimer();
         LeanTween.cancel(gameObject);
         startButton.interactable = true;
-        autoStopToggle.interactable = true;
         stopButton.interactable = false;
         motorVelocity = 0;
         motorForce = 0;
         joint.useMotor = false;
     }
+    #endregion
 
+    #region ---EVENTS---
     private void OnWheelStopped(WheelSegment segment)
     {
         Debug.Log(segment.value);
 
+        timer.StartTimer();
+
         PlayWin();
-        WinnerText.text = segment.value;
+        winnerWindow.titleText = segment.value;
+        //winnerWindow.descriptionText = "is a winner!";
+        winnerWindow.UpdateUI();
+        winnerWindow.OpenWindow();
         winParticle.Play();
         lastWinner = segment;
 
@@ -194,17 +218,60 @@ public class WheelOfFortune : MonoBehaviour
         {
             lastWinner.gameObject.GetComponent<WheelMesh>().updateMeshes = false;
 
-            LeanTween.move(lastWinner.canvas.gameObject, new Vector3(0, 2, -3), 1)
-                .setOnStart(() =>
-                {
-                    LeanTween.rotate(lastWinner.canvas.gameObject, new Vector3(0, 0, 0), 1);
-                });
+            //LeanTween.move(lastWinner.canvas.gameObject, new Vector3(0, 2, -3), 1)
+            //    .setOnStart(() =>
+            //    {
+            //        LeanTween.rotate(lastWinner.canvas.gameObject, new Vector3(0, 0, 0), 1);
+            //    });
 
             wheelSegments.Remove(lastWinner);
-            //UpdateSegmentCount(wheelSegments.Count);
+            UpdateSegmentCount(wheelSegments.Count);
+        }
+    }
+    #endregion
+
+    #region ---UI---
+    public void UpdatePartCount(float count)
+    {
+        partCountText.text = "Part Count " + count;
+        segmentSlider.minValue = circleVertexSize;
+
+        RebuildWheel();
+    }
+
+    public void UpdateSegmentCount(float count)
+    {
+        circleSegmentCount = (int)count;
+        segmentSlider.SetValueWithoutNotify(count);
+        RebuildWheel();
+    }
+
+    public void UpdateSegmentResolution(float resolution)
+    {
+        circleResolution = (int)resolution;
+        RebuildWheel();
+    }
+
+    public void UpdateAutoStop(bool toggle)
+    {
+        LeanTween.cancel(gameObject);
+
+        if (toggle && wheelMode == Mode.Running)
+        {
+            LeanTween.delayedCall(gameObject, autoStopTimer, () =>
+            {
+                StopMotor();
+            });
         }
     }
 
+    public void UpdateRemoveWinners(bool toggle)
+    {
+        removeWinners = toggle;
+    }
+    #endregion
+
+    #region ---SEGMENTS---
     public void CreateNewSegment(int position)
     {
         //Segment
@@ -246,36 +313,6 @@ public class WheelOfFortune : MonoBehaviour
         wheelMesh.segment = newWheelSegment;
     }
 
-    public void UpdatePartCount(float count)
-    {
-        partCountText.text = "Part Count: " + count;
-        partCountSlider.maxValue = (circleSegmentCount / circleVertexSize);
-        partCountSlider.SetValueWithoutNotify(count);
-        segmentSlider.minValue = circleVertexSize;
-
-        RebuildWheel();
-    }
-
-    public void UpdateSegmentCount(float count)
-    {
-        segmentCountText.text = "Segment Count: " + count;
-        circleSegmentCount = (int)count;
-        segmentSlider.SetValueWithoutNotify(count);
-        RebuildWheel();
-    }
-
-    public void UpdateSegmentResolution(float resolution)
-    {
-        segmentResolutionText.text = "Segment Resolution: " + resolution;
-        circleResolution = (int)resolution;
-        RebuildWheel();
-    }
-
-    public void UpdateRemoveWinners(bool toggle)
-    {
-        removeWinners = toggle;
-    }
-
     public void CreateWheelSegment()
     {
         wheelSegments.Add(new WheelSegment
@@ -286,6 +323,8 @@ public class WheelOfFortune : MonoBehaviour
 
         UpdatePartCount(wheelSegments.Count);
         UpdateSegmentCount(wheelSegments.Count);
+        RebuildUsers();
+        segmentValueInput.text = "";
     }
 
     public void DeleteAllSegments()
@@ -306,8 +345,8 @@ public class WheelOfFortune : MonoBehaviour
 
         UpdatePartCount(0);
         UpdateSegmentCount(0);
+        RebuildUsers();
     }
-
     private void RebuildWheel()
     {
         foreach (var wheelMesh in wheelMeshes)
@@ -327,7 +366,44 @@ public class WheelOfFortune : MonoBehaviour
             CreateNewSegment(i);
         }
     }
+    #endregion
 
+
+    #region ---USERS---
+    private void RebuildUsers()
+    {
+        foreach (Transform item in wheelUserListParent)
+        {
+            Destroy(item.gameObject);
+        }
+
+        users.Clear();
+        foreach (var segment in wheelSegments)
+        {
+            User tmpUser = Instantiate(wheelUserListPrefab, wheelUserListParent).GetComponent<User>();
+            tmpUser.ShowSegment(segment, this);
+            users.Add(tmpUser);
+        }
+    }
+
+    public void UpdateUser(User user)
+    {
+        wheelSegments[user.Id].value = user.UserName;
+        RebuildWheel();
+        //RebuildUsers();
+    }
+
+    public void RemoveUser(User user)
+    {
+        users.Remove(user);
+        wheelSegments.Remove(wheelSegments.Single((WheelSegment s) => s.value == user.UserName));
+        UpdateSegmentCount(wheelSegments.Count);
+        RebuildWheel();
+        RebuildUsers();
+    }
+    #endregion
+
+    #region ---AUDIO---
     public void PlayHitDivider(Transform divider)
     {
         PlayOneShot(hitDividerClip, divider, 0.5f);
@@ -352,4 +428,5 @@ public class WheelOfFortune : MonoBehaviour
             Destroy(tmpAudioSource, clip.length);
         }
     }
+    #endregion
 }
