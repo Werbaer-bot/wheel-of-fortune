@@ -1,6 +1,5 @@
 {
   "dependencies": {
-    "com.dentedpixel.leantween": "file:D:/Git/Packages/leantween",
     "com.unity.ugui": "1.0.0",
     "com.unity.modules.ai": "1.0.0",
     "com.unity.modules.androidjni": "1.0.0",
