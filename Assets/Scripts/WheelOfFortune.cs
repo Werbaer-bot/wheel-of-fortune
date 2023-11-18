@@ -90,6 +90,7 @@ public class WheelOfFortune : MonoBehaviour
         UpdatePartCount(wheelSegments.Count);
         UpdateSegmentCount(wheelSegments.Count);
         UpdateSegmentResolution(circleResolution);
+        LoadUsers();
         RebuildUsers();
         onValueChanged.AddListener(OnWheelStopped);
     }
@@ -327,6 +328,11 @@ public class WheelOfFortune : MonoBehaviour
         segmentValueInput.text = "";
     }
 
+    public void RestartUserSegments()
+    {
+        RebuildWheel();
+    }
+
     public void DeleteAllSegments()
     {
         foreach (var wheelMesh in wheelMeshes)
@@ -390,7 +396,6 @@ public class WheelOfFortune : MonoBehaviour
     {
         wheelSegments[user.Id].value = user.UserName;
         RebuildWheel();
-        //RebuildUsers();
     }
 
     public void RemoveUser(User user)
@@ -400,6 +405,27 @@ public class WheelOfFortune : MonoBehaviour
         UpdateSegmentCount(wheelSegments.Count);
         RebuildWheel();
         RebuildUsers();
+    }
+
+    private void SaveUsers()
+    {
+        PlayerPrefs.SetInt("UserCount", users.Count);
+
+        for (int i = 0; i < users.Count; i++)
+        {
+            PlayerPrefs.SetString($"User{i}", users[i].UserName);
+
+        }
+    }
+
+    private void LoadUsers()
+    {
+        for (int i = 0; i < PlayerPrefs.GetInt("UserCount", 0); i++)
+        {
+            segmentValueInput.text = PlayerPrefs.GetString($"User{i}", "invalid");
+            CreateWheelSegment();
+        }
+        segmentValueInput.text = "";
     }
     #endregion
 

@@ -51,4 +51,9 @@ public class Timer : MonoBehaviour
     {
         isRunning = false;
     }
+
+    public void UpdateTimerMax(float maxInMiutes)
+    {
+        timerMax = maxInMiutes * 60;
+    }
 }

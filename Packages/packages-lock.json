@@ -1,11 +1,5 @@
 {
   "dependencies": {
-    "com.dentedpixel.leantween": {
-      "version": "file:D:/Git/Packages/leantween",
-      "depth": 0,
-      "source": "local",
-      "dependencies": {}
-    },
     "com.unity.ext.nunit": {
       "version": "1.0.6",
       "depth": 2,
